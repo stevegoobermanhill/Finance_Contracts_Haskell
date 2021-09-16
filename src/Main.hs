@@ -1,49 +1,38 @@
 import System.IO
 
+import Date
 import Environment
 import Contract
 import DerivedContract
 import Model
 import Valuation
 
-main :: IO ExitCode
+main :: IO ()
 main = do
-    xm :: Model
-    xm = exampleModel ()
+    -- xm :: Model
+    let xm = exampleModel ()
 
-    evalX :: Contract -> PR Double
-    evalX = evalC xm USD
+    -- evalX :: Contract -> PR CValue
+    let evalX = evalC xm USD
 
     -- Examples -----------------------------------
+   -- let t1Horizon = 3 :: TimeStep
+    let t1 = mkDate 3
+    let c1 = zcb t1 10 USD
 
-
-    zcb :: Date -> Double -> Currency -> Contract
-    zcb t x k = cWhen (at t) (scale (konst x) (one k))
-
-    c1 :: Contract
-    c1 = zcb t1 10 USD
-
-    t1 :: Date
-    t1 = mkDate t1Horizon
-
-    t1Horizon = 3 :: TimeStep
-
-    c11 :: Contract
-    c11 = european (mkDate 2)
+    let c11 = european (mkDate 2)
                 (zcb (mkDate 20) 0.4 USD `cAnd`
                 zcb (mkDate 30) 9.3 USD `cAnd`
                 zcb (mkDate 40) 109.3 USD `cAnd`
                 give (zcb (mkDate 12) 100 USD))
 
 
-    pr1 :: PR Double
-    pr1 = evalX c1
+    let f1= future (mkDate 3) IBM 100.0 2000.0 USD
 
-    tr1 = unPr pr1
+    let pr1 = evalX f1
+    --let tr1 = unPr pr1
 
-    future:: Date -> Equity -> Double -> Double -> Currency -> Contract
-    future t equity quantity price currency = cWhen (at t) (scale (konst quantity) (OneE equity)) `cAnd` Give ((scale (konst price) (One currency)))
+    
 
-    f1= future (mkDate 3 0) IBM 100 2000.0 USD
-
-    putStrLn show tr1
+ 
+    putStrLn $ show pr1

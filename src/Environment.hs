@@ -8,7 +8,8 @@ module Environment (
     CValue,
     Currency(..),
     Equity(..),
-    rateModel
+    rateModel,
+    equityModel
 )
 where
 
@@ -23,29 +24,40 @@ data Equity = IBM | DEL
 -- currency model
 type CValue = Double
 
-newtype CurrencyModel = CurrencyModel {unCM :: (Currency, (CValue, CValue))} -- Currency, (Initial Value, Delta)
-    deriving Show
+data ValueModel a = ValueModel {unVM :: (a, (CValue, CValue))} deriving Show
 
-
-currencyModels = [ CurrencyModel (CHF, (7,   0.8))
-                , CurrencyModel (EUR, (6.5, 0.25))
-                , CurrencyModel (GBP, (8,   0.5))
-                , CurrencyModel (KYD, (11,  1.2))
-                , CurrencyModel (USD, (5,  1))
-                , CurrencyModel (ZAR, (15,  1.5)) ]
-
-rateModels = map rates currencyModels
-
-
-rates :: CurrencyModel -> (Currency, PR CValue)
-rates cm = (c, PR $ makeRateSlices rateNow 1)
+values :: ValueModel a -> (a, PR CValue)
+values vm = (v, PR $ makeRateSlices rateNow 1)
     where
-        (c, (rateNow, delta)) = unCM cm
+        (v, (rateNow, delta)) = unVM vm
         makeRateSlices rateNow n = (rateSlice rateNow n) : (makeRateSlices (rateNow-delta) (n+1))
         rateSlice minRate n = take n [minRate, minRate+(delta*2) ..]
+
+
+currencyModels = [ ValueModel (CHF, (7,   0.8))
+                , ValueModel (EUR, (6.5, 0.25))
+                , ValueModel (GBP, (8,   0.5))
+                , ValueModel (KYD, (11,  1.2))
+                , ValueModel (USD, (5,  1))
+                , ValueModel (ZAR, (15,  1.5)) ]
+
+-- rates = values Currency
+
+rateModels = map values currencyModels
+
 
 rateModel :: Currency -> PR CValue
 rateModel k = case lookup k rateModels of
                 Just x -> x
                 Nothing -> error $ "rateModel: currency not found " ++ (show k)
 
+
+equityModels = [ ValueModel (IBM, (100.0, 1.0)),
+                 ValueModel (DEL, (50.0, 1.5))]
+
+equityModels' = map values equityModels
+
+equityModel :: Equity -> PR CValue
+equityModel k = case lookup k equityModels' of
+                Just x -> x
+                Nothing -> error $ "equityModel: equity not found " ++ (show k)

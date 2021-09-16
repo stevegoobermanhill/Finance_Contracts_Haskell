@@ -7,26 +7,29 @@
 module Model
 where
 
+import Date
 import ValueProcess
-import Lattice
+import Lattice as L
+import Observable
+import Environment as E
 
 
 
 -- Model -------------------------
 data Model = Model {
                 modelStart :: Date,
-                disc       :: Currency -> (PR Bool, PR Double) -> PR Double,
-                exch       :: Currency -> Currency -> PR Double,
-                absorb     :: Currency -> (PR Bool, PR Double) -> PR Double,
-                rateModel  :: Currency -> PR Double
+                disc       :: Currency -> (PR Bool, PR CValue) -> PR CValue,
+                exch       :: Currency -> Currency -> PR CValue,
+                absorb     :: Currency -> (PR Bool, PR CValue) -> PR CValue,
+                rateModel  :: Currency -> PR CValue
                 }
 
 
 exampleModel :: CalendarTime -> Model
 exampleModel modelDate = Model {
                 modelStart = (modelDate,0),
-                disc       = disc,
-                exch       = exch,
-                absorb     = absorb,
-                rateModel  = rateModel
+                Model.disc       = L.disc,
+                Model.exch       = L.exch,
+                Model.absorb     = L.absorb,
+                Model.rateModel  = E.rateModel
                 }
