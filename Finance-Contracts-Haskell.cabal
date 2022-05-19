@@ -33,7 +33,8 @@ executable Finance-Contracts-Haskell
                        DerivedContract,
                        Lattice,
                        Valuation,
-                       Model
+                       Model,
+                       Asset
                        
 
   -- other-extensions:
