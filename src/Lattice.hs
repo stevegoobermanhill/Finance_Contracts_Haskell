@@ -1,73 +1,64 @@
--- Composable contracts
--- stephen.gooberman-hill@amey.co.uk
-
--- Lattice.hs
--- lattice model to implement value process 
-
-module Lattice (
-    disc,
-    absorb,
-    exch,
-    expectedValue
-)
+{-# LANGUAGE GADTs #-}
+module Lattice 
 where
 
+import PDist
+import Data.Map.Strict
 
-import Numeric
-
-import ValueProcess
-import Environment
-
-
-
-
--- Disc primitive
-disc :: Currency -> (PR Bool, PR CValue) -> PR CValue
-disc k (PR bs, PR rs) = PR $ discCalc bs rs (unPr $ rateModel k)
-
-discCalc :: [RV Bool] -> [RV CValue] -> [RV CValue] -> [RV CValue]
-discCalc (bRv:bs) (pRv:ps) (rateRv:rs) =
-    if and bRv -- test for horizon
-        then [pRv]
-        else
-            let
-                rest@(nextSlice:_) = discCalc bs ps rs
-                discSlice = zipWith (\x r -> x / (1 + r/100)) (prevSlice nextSlice) rateRv
-                thisSlice = zipWith3 (\b p q -> if b then p else q) bRv pRv discSlice
-            in thisSlice : rest
-
-prevSlice :: RV CValue -> RV CValue
-prevSlice [] = []
-prevSlice (_:[]) = []
-prevSlice (n1:rest@(n2:_)) = (n1+n2)/2 : prevSlice rest
+-- class LatticeElement is a traversable element
+-- supporting next and prev methods
+class LatticeElement a where
+    next :: a -> a -- next element
 
 
--- Absorb primitive
-absorb :: Currency -> (PR Bool, PR CValue) -> PR CValue
-absorb k (PR bSlices, PR rvs) =
-            PR $ zipWith (zipWith $ \o p -> if o then 0 else p)
-                        bSlices rvs
+    -- QUESTION can we provide a compiler hint that 
+    -- next . prev == id == prev . next
+
+-- LatticeDate is a generalization of the idea of a date
+-- doesn't have to be a date (could start with an int!)
+class (Ord a, LatticeElement a) => LatticeDate a where
+        prev :: a -> a -- prev date
+
+class (Eq v, LatticeElement v) => LatticeDist v
+
+-- LatticeValueModel combines an array of  LatticeDate and LatticeDist together
+-- with a representative symbol (currency, equity etc)
+data LatticeSlice d ld = forall d v. (LatticeDate d, LatticeDist v) => LatticeSlice{date :: d, slice :: v}
+type Lattice d pd = [LatticeSlice d pd]
+data LatticeValueModel s d v = forall d v. (LatticeDate d, LatticeDist v) => LatticeValueModel{symbol :: s, model :: Lattice d v }
 
 
--- Exchange rate model
-exch :: Currency -> Currency -> PR CValue
-exch k1 k2 = PR (konstSlices 1)
+-- IntDate is an instantiation of date through an integer avlue (time period number)
+newtype IntDate = IntDate{unIntDate :: Int}
+instance Eq IntDate where
+    (==) x y = (unIntDate x) == (unIntDate y)
+    -- (/=) x y = (unIntDate x) /= (unIntDate y)
+
+instance Ord IntDate where
+    (<=) x y = (unIntDate x) <= (unIntDate y)
+
+instance LatticeElement IntDate where
+    next i = IntDate $ (unIntDate i) + 1
+
+instance LatticeDate IntDate where
+    prev i = IntDate $ (unIntDate i) - 1
 
 
--- Expected value
-expectedValue :: RV CValue -> RV CValue -> Double
-expectedValue outcomes probabilities = sum $ zipWith (*) outcomes probabilities
 
-expectedValuePr :: PR CValue -> [Double]
-expectedValuePr (PR rvs) = zipWith expectedValue rvs probabilityLattice
+--SimpleRateElement is a LatticeSlice where elements transform in a multiplicative fashion
+upVol :: Double -> Double -> Double
+upVol volatility value = volatility * value
 
+downVol :: Double -> Double -> Double
+downVol volatility value = volatility / value
 
--- Probability calculation
-probabilityLattice :: [RV CValue]
-probabilityLattice = probabilities pathCounts
-    where
-        probabilities :: [RV Integer] -> [RV CValue]
-        probabilities (sl:sls) = map (\n -> (fromInteger n) / (fromInteger (sum sl))) sl : probabilities sls
+binaryStep :: Double -> PDist (Double -> Double)
+binaryStep vol = normalize $ PDist [pure $ upVol vol, pure $ downVol vol]
 
-        pathCounts :: [RV Integer]
-        pathCounts = paths [1] where paths sl = sl : (paths (zipWith (+) (sl++[0]) (0:sl)))
+data BinomialDist = BinomialDist{ dist :: PDist Double, volatility :: Double}
+instance LatticeElement BinomialDist where
+    next bd = bd {dist = (binaryStep (volatility bd)) <*> (dist bd)  }
+
+type SimpleModel s = LatticeValueModel s IntDate BinomialDist   
+
+ 
