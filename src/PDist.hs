@@ -27,6 +27,11 @@ instance Monad PValue where
         p = prob lp * prob l
         v = value l 
 
+-- if v is an instance of Eq then PValue is an instance of Eq
+instance (Eq v) => Eq(PValue v) where
+    (==) x y = value x == value y
+
+
 --PDist is an array of PValues
 --again a monad
 --this is really useful
@@ -55,6 +60,7 @@ instance Monad PDist where
                     | lpv <-  unPDist ls]
         lps = concat lss
 
+
 -- The functor / applicative / monad functionality on PDist doesn't enable us to group
 -- together elements with identical values
 -- so compact will enable that
@@ -71,6 +77,11 @@ normalize ls = PDist [lp{prob = prob lp / total} | lp <- unPDist ls] where
 -- compNorm is simply shorthand :-)
 compNorm :: (Eq v) => PDist v -> PDist v
 compNorm = normalize . compact 
+
+-- <**> is an extension of the applicative <*> to compactable PDists
+-- can't be in Applicative as it would break the Applicative laws
+(<**>) :: (Eq b) => PDist (a -> b) -> PDist a -> PDist b
+lsf <**> lsv = compNorm $ lsf <*> lsv
 
 
 -- reachable
