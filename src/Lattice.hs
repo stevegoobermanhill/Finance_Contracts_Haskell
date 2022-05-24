@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Lattice 
 where
@@ -20,16 +21,31 @@ class (Ord a, LatticeElement a) => LatticeDate a where
 
 -- LatticeValueModel combines an array of  LatticeDate and LatticeDist together
 -- with a representative symbol (currency, equity etc)
-data LatticeSlice d v = forall d v. (LatticeDate d, LatticeElement v) => LatticeSlice{date :: d, slice :: v}
-instance LatticeElement (LatticeSlice d ld) where
-    next LatticeSlice{date = d,slice = sl} = LatticeSlice{date = next d, slice = next sl}
+data LatticeSlice d v = (LatticeDate d, LatticeElement v) => LatticeSlice{date :: d, slice :: v}
+instance LatticeElement (LatticeSlice d v) where
+    next LatticeSlice{date = d, slice = sl} = LatticeSlice{date = next d, slice = next sl}
+
+-- copy a LatticeSlice, but with the next date
+incDate :: LatticeSlice d v -> LatticeSlice d v
+incDate LatticeSlice{date = d, slice =  sl}  = LatticeSlice{date = next d, slice = sl}
+
+-- apply a map function to a slice, preserving the date
+map :: (LatticeElement w) => (v -> w) -> LatticeSlice d v -> LatticeSlice d w
+map f LatticeSlice{date = d, slice = sl} = LatticeSlice{date = d, slice = f sl}    
 
 type Lattice d pd = [LatticeSlice d pd]
 
-makeLattice :: LatticeSlice d ld -> Lattice d ld
+makeLattice :: LatticeSlice d v -> Lattice d v
 makeLattice ls = ls : makeLattice (next ls)
 
-data LatticeValueModel s d v = forall d v. (LatticeDate d, LatticeElement v) => LatticeValueModel{symbol :: s, model :: Lattice d v }
+makeLatticeFn :: (LatticeElement v) => (v -> v) -> LatticeSlice d v -> Lattice d v
+makeLatticeFn f ls = let
+    mls = Lattice.map f ls
+    inc = incDate mls
+    in 
+    ls : makeLatticeFn f inc
+
+data LatticeValueModel s d v = (LatticeDate d, LatticeElement v) => LatticeValueModel{symbol :: s, model :: Lattice d v }
 
 -- IntDate is an instantiation of date through an integer avlue (time period number)
 newtype IntDate = IntDate{unIntDate :: Int}
@@ -57,6 +73,7 @@ binaryStep vol = normalize $ PDist [pure $ upVol vol, pure $ downVol vol]
 data BinomialDist = BinomialDist{ dist :: PDist Double, volatility :: Double}
 instance LatticeElement BinomialDist where
     next bd = bd {dist = (binaryStep (volatility bd)) <**> (dist bd)  }
+    
 
 type SimpleModel s = LatticeValueModel s IntDate BinomialDist
 

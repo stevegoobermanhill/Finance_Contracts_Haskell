@@ -1,41 +1,14 @@
-{-# LANGUAGE InstanceSigs #-}
-
 module PDist 
 where
 
+import PValue
 import Data.List    
--- can we make the lattice a monad ?
-
-
---PValue is a pair of (prob, value)
---we can make it a monad :-)
-data PValue v = PValue{prob::Double, value::v}
-
-instance Functor PValue where
-    fmap :: (a -> b) -> PValue a -> PValue b 
-    fmap f lp = PValue {prob = prob lp, value = f $ value lp}
-
-instance Applicative PValue where
-    pure v = PValue{prob = 1.0, value = v}
-    lpf <*> lpv = PValue{prob = (prob lpf) * (prob lpv), value = (value lpf) $ (value lpv)}
-
-instance Monad PValue where
-    return = pure
-    -- PValue v >>= (v -> PValue w) -> PValue w
-    lp >>= f = PValue{prob = p, value = v} where
-        l = f $ value lp
-        p = prob lp * prob l
-        v = value l 
-
--- if v is an instance of Eq then PValue is an instance of Eq
-instance (Eq v) => Eq(PValue v) where
-    (==) x y = value x == value y
 
 
 --PDist is an array of PValues
 --again a monad
 --this is really useful
--- applicative allows us to apply a set of functions based ona  probability distribution
+-- applicative allows us to apply a set of functions based on a  probability distribution
 -- monad makes that even more useful
 
 data PDist v = PDist{unPDist::[PValue v]}    
@@ -45,7 +18,7 @@ instance Functor PDist where
 
 instance Applicative PDist where
     pure v = PDist [pure v]
-    (<*>) :: PDist (a -> b) -> PDist a -> PDist b
+    -- (<*>) :: PDist (a -> b) -> PDist a -> PDist b
     lsf <*> lsv = PDist lps where
         lps = [ lpf <*> lpv | lpf <- unPDist lsf, lpv <- unPDist lsv]
     
@@ -59,6 +32,15 @@ instance Monad PDist where
                     (unPDist $ (f $ value lpv))
                     | lpv <-  unPDist ls]
         lps = concat lss
+
+lift :: (a -> b) -> PDist a -> PDist b
+lift = fmap
+
+lift2 :: (a -> b -> c) -> PDist a -> PDist b -> PDist c
+lift2 f a b = pure f <*> a <*> b
+
+lift3 :: (a -> b -> c -> d) -> PDist a -> PDist b -> PDist c -> PDist d
+lift3 f a b c = pure f <*> a <*> b <*> c
 
 
 -- The functor / applicative / monad functionality on PDist doesn't enable us to group
